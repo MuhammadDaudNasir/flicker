@@ -2142,101 +2142,159 @@ function escHtml(s) {
 //  AUTH — Google + Apple only
 // ════════════════════════════════════════
 function openAuthModal() {
-  document.getElementById('auth-modal').classList.add('open');
+  const modal = document.getElementById('auth-modal');
+  if (modal) modal.classList.add('open');
 }
+
 function closeAuthModal() {
-  document.getElementById('auth-modal').classList.remove('open');
+  const modal = document.getElementById('auth-modal');
+  if (modal) modal.classList.remove('open');
 }
 
 async function signInWithGoogle() {
-  if (!firebaseEnabled) { toast('Firebase not configured yet', 'warning'); closeAuthModal(); return; }
+  if (!firebaseEnabled || !auth) {
+    toast('Firebase not configured yet', 'warning');
+    closeAuthModal();
+    return;
+  }
+
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
+
     await auth.signInWithPopup(provider);
+
     closeAuthModal();
     toast('Signed in with Google!', 'success');
-  } catch(e) {
+
+  } catch (e) {
     console.error(e);
-    if (e.code !== 'auth/popup-closed-by-user') toast('Sign in failed: ' + e.message, 'warning');
+
+    if (e.code !== 'auth/popup-closed-by-user') {
+      toast('Sign in failed: ' + e.message, 'warning');
+    }
   }
 }
 
 async function signInWithApple() {
-  if (!firebaseEnabled) { toast('Firebase not configured yet', 'warning'); closeAuthModal(); return; }
+  if (!firebaseEnabled || !auth) {
+    toast('Firebase not configured yet', 'warning');
+    closeAuthModal();
+    return;
+  }
+
   try {
     const provider = new firebase.auth.OAuthProvider('apple.com');
     provider.addScope('name');
+
     await auth.signInWithPopup(provider);
+
     closeAuthModal();
     toast('Signed in with Apple!', 'success');
-  } catch(e) {
+
+  } catch (e) {
     console.error(e);
-    if (e.code !== 'auth/popup-closed-by-user') toast('Sign in failed: ' + e.message, 'warning');
+
+    if (e.code !== 'auth/popup-closed-by-user') {
+      toast('Sign in failed: ' + e.message, 'warning');
+    }
   }
 }
 
 async function signOut() {
   if (!firebaseEnabled || !auth) return;
+
   try {
     await auth.signOut();
+
     currentUser = null;
     lbUser = '';
+
     localStorage.removeItem('flicker_lb_name');
+
     updateAuthUI(null);
     toast('Signed out', 'info');
-  } catch(e) { console.error(e); }
+
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 function updateAuthUI(user) {
-  // Sidebar
+
   const sbOut = document.getElementById('sb-signed-out');
   const sbIn  = document.getElementById('sb-signed-in');
-  // Mobile
+
   const mobOut = document.getElementById('mob-auth-signed-out');
   const mobIn  = document.getElementById('mob-auth-signed-in');
 
   if (user) {
-    sbOut.style.display = 'none';   sbIn.style.display = 'block';
-    mobOut.style.display = 'none';  mobIn.style.display = 'block';
+
+    if (sbOut) sbOut.style.display = 'none';
+    if (sbIn)  sbIn.style.display  = 'block';
+
+    if (mobOut) mobOut.style.display = 'none';
+    if (mobIn)  mobIn.style.display  = 'block';
 
     const name = user.displayName || 'Reader';
     const initial = name.charAt(0).toUpperCase();
-    document.getElementById('sb-user-name').textContent = name;
 
-    // Avatar — photo or initial
-    const sbAv = document.getElementById('sb-avatar');
+    const nameEl = document.getElementById('sb-user-name');
+    if (nameEl) nameEl.textContent = name;
+
+    const sbAv  = document.getElementById('sb-avatar');
     const mobAv = document.getElementById('mob-avatar');
+
     if (user.photoURL) {
-      sbAv.innerHTML  = `<img src="${user.photoURL}" alt="">`;
-      mobAv.innerHTML = `<img src="${user.photoURL}" alt="">`;
+
+      if (sbAv)  sbAv.innerHTML  = `<img src="${user.photoURL}" alt="">`;
+      if (mobAv) mobAv.innerHTML = `<img src="${user.photoURL}" alt="">`;
+
+      if (mobAv) mobAv.style.background = 'transparent';
+
     } else {
-      sbAv.textContent  = initial;
-      mobAv.textContent = initial;
+
+      if (sbAv)  sbAv.textContent  = initial;
+      if (mobAv) mobAv.textContent = initial;
+
+      if (mobAv) mobAv.style.background = 'var(--pink)';
     }
-    mobAv.style.background = user.photoURL ? 'transparent' : 'var(--pink)';
+
   } else {
-    sbOut.style.display = 'block';   sbIn.style.display = 'none';
-    mobOut.style.display = 'block';  mobIn.style.display = 'none';
+
+    if (sbOut) sbOut.style.display = 'block';
+    if (sbIn)  sbIn.style.display  = 'none';
+
+    if (mobOut) mobOut.style.display = 'block';
+    if (mobIn)  mobIn.style.display  = 'none';
   }
 }
 
-// Sync user stats to Firestore on sign-in
 async function syncUserData(user) {
-  if (!firebaseEnabled || !db) return;
+
+  if (!firebaseEnabled || !db || !user) return;
+
   try {
+
     const ref = db.collection('users').doc(user.uid);
     const snap = await ref.get();
+
     if (snap.exists) {
-      // Merge cloud data — keep highest values
+
       const cloud = snap.data();
-      if ((cloud.bestWpm||0) > (analytics.bestWpm||0)) analytics.bestWpm = cloud.bestWpm;
-      if ((cloud.streak||0) > (analytics.streak||0))   analytics.streak = cloud.streak;
-      analytics.sessions   = Math.max(analytics.sessions, cloud.sessions||0);
-      analytics.totalWords = Math.max(analytics.totalWords, cloud.totalWords||0);
+
+      if ((cloud.bestWpm || 0) > (analytics.bestWpm || 0))
+        analytics.bestWpm = cloud.bestWpm;
+
+      if ((cloud.streak || 0) > (analytics.streak || 0))
+        analytics.streak = cloud.streak;
+
+      analytics.sessions   = Math.max(analytics.sessions, cloud.sessions || 0);
+      analytics.totalWords = Math.max(analytics.totalWords, cloud.totalWords || 0);
+
       saveAnalytics();
     }
-    // Push local data up
+
     await ref.set({
       name: user.displayName || 'Reader',
       bestWpm: analytics.bestWpm || 0,
@@ -2246,9 +2304,11 @@ async function syncUserData(user) {
       uid: user.uid,
       updated: Date.now()
     }, { merge: true });
-  } catch(e) { console.warn('Sync failed:', e); }
-}
 
+  } catch (e) {
+    console.warn('Sync failed:', e);
+  }
+}
 // ════════════════════════════════════════
 //  TOUR SYSTEM — simple & bulletproof
 // ════════════════════════════════════════
